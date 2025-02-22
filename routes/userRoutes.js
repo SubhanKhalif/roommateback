@@ -9,29 +9,42 @@ import {
   updatePassword,
   createUser,
   uploadProfileImage,
-  getProfileImage,
-  upload
+  getProfileImage
 } from "../controllers/userController.js";
+import upload from "../config/uploadMiddleware.js";
 
 const router = express.Router();
 
-// User creation route
+// ✅ Fetch all users (GET /api/users)
+router.get("/", async (req, res) => {
+  try {
+    const users = await User.find({});
+    res.json(users);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ message: "Server error fetching users" });
+  }
+});
+
+// ✅ Create new user
 router.post("/", createUser);
 
-// Profile-related routes
+// ✅ Get user profile (Protected)
 router.get("/profile", protect, getUserProfile);
+
+// ✅ Update user profile (Protected)
 router.put("/profile", protect, updateUserProfile);
 
-// Profile image routes
+// ✅ Upload and get profile image
 router.put("/:id/profile-image", upload.single("image"), uploadProfileImage);
 router.get("/:id/profile-image", getProfileImage);
 
-// Password reset routes
+// ✅ Password reset functionality
 router.post("/reset-password", sendResetEmail);
 router.post("/verify-token", verifyOtp);
 router.put("/update-password", updatePassword);
 
-// Get user details by ID
+// ✅ Get user details by ID
 router.get("/:id", async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select("-password");

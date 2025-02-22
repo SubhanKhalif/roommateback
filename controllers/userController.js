@@ -142,13 +142,18 @@ export const getProfileImage = async (req, res) => {
 // Generate and send email with OTP
 export const sendResetEmail = async (req, res) => {
   const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ message: "Email is required" });
+  }
+
   try {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const token = jwt.sign({ email, otp }, process.env.JWT_SECcret, { expiresIn: "10m" });
+    const token = jwt.sign({ email, otp }, process.env.JWT_SECRET, { expiresIn: "10m" });
 
     // Store OTP in the database
     user.otp = otp;
@@ -174,7 +179,8 @@ export const sendResetEmail = async (req, res) => {
 
     res.json({ message: "Verification email sent!", token });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Error in sendResetEmail:", error);
+    res.status(500).json({ message: "Failed to send reset email", error: error.message });
   }
 };
 
@@ -185,28 +191,37 @@ export const verifyOtp = async (req, res) => {
     return res.status(400).json({ message: "Email and OTP are required." });
   }
 
-  const user = await User.findOne({ email });
+  try {
+    const user = await User.findOne({ email });
 
-  if (!user) {
-    return res.status(404).json({ message: "User not found." });
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Check if OTP is correct and not expired
+    if (user.otp !== otp || user.otpExpires < Date.now()) {
+      return res.status(400).json({ message: "Invalid or expired OTP." });
+    }
+
+    // OTP verified, clear it from the database
+    user.otp = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+
+    res.status(200).json({ message: "OTP verified successfully!" });
+  } catch (error) {
+    console.error("Error in verifyOtp:", error);
+    res.status(500).json({ message: "Failed to verify OTP", error: error.message });
   }
-
-  // Check if OTP is correct and not expired
-  if (user.otp !== otp || user.otpExpires < Date.now()) {
-    return res.status(400).json({ message: "Invalid or expired OTP." });
-  }
-
-  // OTP verified, clear it from the database
-  user.otp = undefined;
-  user.otpExpires = undefined;
-  await user.save();
-
-  res.status(200).json({ message: "OTP verified successfully!" });
 };
 
 // Update password
 export const updatePassword = async (req, res) => {
   const { email, newPassword } = req.body;
+
+  if (!email || !newPassword) {
+    return res.status(400).json({ message: "Email and new password are required" });
+  }
 
   try {
     const user = await User.findOne({ email });
@@ -217,13 +232,13 @@ export const updatePassword = async (req, res) => {
       return res.status(400).json({ message: "OTP verification required before resetting password." });
     }
 
-    // Update the password directly (without hashing)
+    // Save the password directly without hashing
     user.password = newPassword;
-    user.markModified("password");
     await user.save();
 
     res.json({ message: "Password updated successfully!" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Error in updatePassword:", error);
+    res.status(500).json({ message: "Failed to update password", error: error.message });
   }
 };
